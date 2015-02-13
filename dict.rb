@@ -30,6 +30,9 @@ elsif option == "je" then
     dic = "EdictJE"
     # 日本語をURLエンコード
     searchWord = URI.escape(searchWord)
+# てすと
+elsif option == "test" then
+    dic = "EJdict"
 # 誤ったオプションの場合
 else
     puts "wrong OPTION! (\"-ej\" or \"-je\")"
@@ -43,6 +46,33 @@ url = "http://public.dejizo.jp/NetDicV09.asmx/SearchDicItemLite?Dic=#{dic}&Word=
 result = open(url)
 # 検索対象を保管するHash
 ids = {}
+
+
+# てすと
+if option == "test" then
+    doc = REXML::Document.new(result)
+    doc.elements.each("/SearchDicItemResult/TitleList/DicItemTitle") do |ele|
+        id = ele.elements["ItemID"].text
+        word = ele.elements["Title/span"].text
+        ids[id] = word
+    end
+    # 登録されたHashの要素それぞれに対して処理
+    ids.each do |id, word|
+        # 内容取得メソッドへのリクエストURL
+        url = "http://public.dejizo.jp/NetDicV09.asmx/GetDicItemLite?Dic=#{dic}&Item=#{id}&Loc=&Prof=XHTML"
+        result = open(url)                      # レスポンス
+        doc = REXML::Document.new(result)
+        doc.elements.each("/GetDicItemResult/") do |ele|
+            word = ele.elements["Head/div/span"].text
+            means = ele.elements["Body/div/div"].text.split("\t")
+            puts word
+            means.each do |mean|
+                puts "\t" + mean
+            end
+        end
+    end
+end
+
 
 # 英和辞典での処理
 if option == "ej" then
