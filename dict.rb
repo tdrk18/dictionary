@@ -31,8 +31,11 @@ elsif option == "je" then
     # 日本語をURLエンコード
     searchWord = URI.escape(searchWord)
 # てすと
-elsif option == "test" then
+elsif option == "testej" then
     dic = "EJdict"
+elsif option == "testje" then
+    dic = "EdictJE"
+    searchWord = URI.escape(searchWord)
 # 誤ったオプションの場合
 else
     puts "wrong OPTION! (\"-ej\" or \"-je\")"
@@ -49,7 +52,7 @@ ids = {}
 
 
 # てすと
-if option == "test" then
+if option == "testej" then
     doc = REXML::Document.new(result)
     doc.elements.each("/SearchDicItemResult/TitleList/DicItemTitle") do |ele|
         id = ele.elements["ItemID"].text
@@ -62,8 +65,8 @@ if option == "test" then
         url = "http://public.dejizo.jp/NetDicV09.asmx/GetDicItemLite?Dic=#{dic}&Item=#{id}&Loc=&Prof=XHTML"
         result = open(url)                      # レスポンス
         doc = REXML::Document.new(result)
-        doc.elements.each("/GetDicItemResult/") do |ele|
-            word = ele.elements["Head/div/span"].text
+        doc.elements.each("/GetDicItemResult") do |ele|
+            # word = ele.elements["Head/div/span"].text
             means = ele.elements["Body/div/div"].text.split("\t")
             puts word
             means.each do |mean|
@@ -71,11 +74,32 @@ if option == "test" then
             end
         end
     end
-end
 
+elsif option == "testje" then
+    doc = REXML::Document.new(result)
+    doc.elements.each("/SearchDicItemResult/TitleList/DicItemTitle") do |ele|
+        id = ele.elements["ItemID"].text
+        word = ele.elements["Title/span"].text
+        ids[id] = word
+    end
+    # 登録されたHashの要素それぞれに対して処理
+    ids.each do |id, word|
+        # 内容取得メソッドへのリクエストURL
+        url = "http://public.dejizo.jp/NetDicV09.asmx/GetDicItemLite?Dic=#{dic}&Item=#{id}&Loc=&Prof=XHTML"
+        result = open(url)                      # レスポンス
+        doc = REXML::Document.new(result)
+        doc.elements.each("/GetDicItemResult") do |ele|
+            # word = ele.elements["Head/div/span"].text
+            means = ele.elements["Body/div/div/div"].text.split("\t")
+            puts word
+            means.each do |mean|
+                puts "\t" + mean
+            end
+        end
+    end
 
 # 英和辞典での処理
-if option == "ej" then
+elsif option == "ej" then
     result.each do |r|
         # 確認用
         # p r
@@ -127,10 +151,9 @@ if option == "ej" then
             end
         end
     end
-end
 
 # 和英辞典での処理
-if option == "je" then
+elsif option == "je" then
     result.each do |r|
         # 確認用
         # p r
