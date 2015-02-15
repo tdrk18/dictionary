@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 
-require 'net/http'
 require 'uri'
 require 'open-uri'
 require 'rexml/document'
-require 'nkf'
 
 # 入力引数の検証
 # オプション、検索語がない場合
@@ -18,27 +16,22 @@ elsif ARGV.length == 2 and not(ARGV[0].include?("-")) then
 end
 
 # 引数を変数に代入
+# オプションを設定
 option = ARGV[0].gsub("-", "")
-searchWord = ARGV[1]
+# 日本語をURLエンコード
+searchWord = URI.escape(ARGV[1])
 
 # オプションの正当性を確認
 # 英和辞典を選択
-if option == "ej" then
+case option
+when "ej", "testej"
     dic = "EJdict"
 # 和英辞典を選択
-elsif option == "je" then
+when "je", "testje"
     dic = "EdictJE"
-    # 日本語をURLエンコード
-    searchWord = URI.escape(searchWord)
-# てすと
-elsif option == "testej" then
-    dic = "EJdict"
-elsif option == "testje" then
-    dic = "EdictJE"
-    searchWord = URI.escape(searchWord)
 # 誤ったオプションの場合
 else
-    puts "wrong OPTION! (\"-ej\" or \"-je\")"
+    puts "wrong OPTION! (must be \"-ej\" or \"-je\")"
     exit
 end
 
@@ -50,155 +43,57 @@ result = open(url)
 # 検索対象を保管するHash
 ids = {}
 
-
-# てすと
-if option == "testej" then
-    doc = REXML::Document.new(result)
-    doc.elements.each("/SearchDicItemResult/TitleList/DicItemTitle") do |ele|
-        id = ele.elements["ItemID"].text
-        word = ele.elements["Title/span"].text
-        ids[id] = word
-    end
-    # 登録されたHashの要素それぞれに対して処理
-    ids.each do |id, word|
-        # 内容取得メソッドへのリクエストURL
-        url = "http://public.dejizo.jp/NetDicV09.asmx/GetDicItemLite?Dic=#{dic}&Item=#{id}&Loc=&Prof=XHTML"
-        result = open(url)                      # レスポンス
-        doc = REXML::Document.new(result)
-        doc.elements.each("/GetDicItemResult") do |ele|
-            # word = ele.elements["Head/div/span"].text
-            means = ele.elements["Body/div/div"].text.split("\t")
-            puts word
-            means.each do |mean|
-                puts "\t" + mean
-            end
-        end
-    end
-
-elsif option == "testje" then
-    doc = REXML::Document.new(result)
-    doc.elements.each("/SearchDicItemResult/TitleList/DicItemTitle") do |ele|
-        id = ele.elements["ItemID"].text
-        word = ele.elements["Title/span"].text
-        ids[id] = word
-    end
-    # 登録されたHashの要素それぞれに対して処理
-    ids.each do |id, word|
-        # 内容取得メソッドへのリクエストURL
-        url = "http://public.dejizo.jp/NetDicV09.asmx/GetDicItemLite?Dic=#{dic}&Item=#{id}&Loc=&Prof=XHTML"
-        result = open(url)                      # レスポンス
-        doc = REXML::Document.new(result)
-        doc.elements.each("/GetDicItemResult") do |ele|
-            # word = ele.elements["Head/div/span"].text
-            means = ele.elements["Body/div/div/div"].text.split("\t")
-            puts word
-            means.each do |mean|
-                puts "\t" + mean
-            end
-        end
-    end
-
+case option
 # 英和辞典での処理
-elsif option == "ej" then
-    result.each do |r|
-        # 確認用
-        # p r
-        # if r.include?("TotalHitCount") then
-        #     r.gsub!("<TotalHitCount>", "")
-        #     r.gsub!("</TotalHitCount>", "")
-        #     r.strip!
-        # end
-        # 検索対象のItemIDを取得
-        if r.include?("ItemID") then
-            r.gsub!("<ItemID>", "")
-            r.gsub!("</ItemID>", "")
-            r.strip!
-            $id = r
-        end
-        # 検索対象の文字列を取得
-        if r.include?("NetDicTitle") then
-            r.gsub!(/<.+">/, "")
-            r.gsub!(/<.+>/, "")
-            r.strip!
-            # ItemIDをキーとしてHashに登録
-            ids[$id] = r
-        end
+when "ej", "testej"
+    # 検索メソッドのレスポンスをXML形式に変換
+    doc = REXML::Document.new(result)
+    # XMLの各要素について、ハッシュidsに"id=>word"の形式で格納
+    doc.elements.each("/SearchDicItemResult/TitleList/DicItemTitle") do |ele|
+        id = ele.elements["ItemID"].text
+        word = ele.elements["Title/span"].text
+        ids[id] = word
     end
-    
     # 登録されたHashの要素それぞれに対して処理
     ids.each do |id, word|
         # 内容取得メソッドへのリクエストURL
         url = "http://public.dejizo.jp/NetDicV09.asmx/GetDicItemLite?Dic=#{dic}&Item=#{id}&Loc=&Prof=XHTML"
         result = open(url)                      # レスポンス
-        flag = false                            # 標準出力用フラグ
-        result.each do |r|
-            # 標準出力用にデータ整形
-            if flag == true then
-                r.gsub!("<div>", "")
-                r.gsub!("</div>", "")
-                r.strip!
-                r.gsub!("\t", "\n\t")
-                r = "\t" + r
-                # 出力
-                puts word
-                puts r
-                # フラグリセット
-                flag = false
-            end
-            # フラグをセット
-            if r.include?("NetDicBody") then
-                flag = true
+        doc = REXML::Document.new(result)       # XMLに変換
+        # XMLの各要素について、データを加工して標準出力
+        doc.elements.each("/GetDicItemResult") do |ele|
+            puts word
+            means = ele.elements["Body/div/div"].text.split("\t")
+            means.each do |mean|
+                puts "\t" + mean
             end
         end
     end
 
-# 和英辞典での処理
-elsif option == "je" then
-    result.each do |r|
-        # 確認用
-        # p r
-        # if r.include?("TotalHitCount") then
-        #     r.gsub!("<TotalHitCount>", "")
-        #     r.gsub!("</TotalHitCount>", "")
-        #     r.strip!
-        #     p r
-        # end
-        # 検索対象のItemIDを取得
-        if r.include?("ItemID") then
-            r.gsub!("<ItemID>", "")
-            r.gsub!("</ItemID>", "")
-            r.strip!
-            $id = r
-        end
-        # 検索対象の文字列を取得
-        if r.include?("NetDicTitle") then
-            r.gsub!(/<.+">/, "")
-            r.gsub!(/<.+>/, "")
-            r.strip!
-            # ItemIDをキーとしてHashに登録
-            ids[$id] = r
-        end
+# 和英辞典をでの処理
+when "je", "testje"
+    # 検索メソッドのレスポンスをXML形式に変換
+    doc = REXML::Document.new(result)
+    # XMLの各要素について、ハッシュidsに"id=>word"の形式で格納
+    doc.elements.each("/SearchDicItemResult/TitleList/DicItemTitle") do |ele|
+        id = ele.elements["ItemID"].text
+        word = ele.elements["Title/span"].text
+        ids[id] = word
     end
-    
     # 登録されたHashの要素それぞれに対して処理
     ids.each do |id, word|
         # 内容取得メソッドへのリクエストURL
         url = "http://public.dejizo.jp/NetDicV09.asmx/GetDicItemLite?Dic=#{dic}&Item=#{id}&Loc=&Prof=XHTML"
         result = open(url)                      # レスポンス
-        result.each do |r|
-            # 標準出力用にデータ整形
-            if r.include?("(n)") or r.include?("(exp)") then
-                r.gsub!(/<div>\(n\)/, "")
-                r.gsub!(/<div>\(exp\)/, "")
-                r.gsub!(/<.+>/, "")
-                r.strip!
-                r = "\t" + r
-                # 出力
-                puts word
-                puts r
+        doc = REXML::Document.new(result)       # XMLに変換
+        # XMLの各要素について、データを加工して標準出力
+        doc.elements.each("/GetDicItemResult") do |ele|
+            puts word
+            means = ele.elements["Body/div/div/div"].text.split("\t")
+            means.each do |mean|
+                puts "\t" + mean
             end
         end
     end
 end
-
 
